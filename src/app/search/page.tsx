@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
@@ -30,7 +30,7 @@ const categories = [
   { value: '기타', label: '기타' },
 ];
 
-export default function SearchPage() {
+function SearchPageContent() {
   const searchParams = useSearchParams();
   const keyword = searchParams.get('keyword') || '';
 
@@ -288,5 +288,19 @@ export default function SearchPage() {
         </aside>
       </div>
     </div>
+  );
+}
+
+export default function SearchPage() {
+  return (
+    <Suspense fallback={
+      <div className="w-full py-8">
+        <div className="max-w-7xl mx-auto px-4">
+          <div className="text-center py-16 text-gray-500">로딩 중...</div>
+        </div>
+      </div>
+    }>
+      <SearchPageContent />
+    </Suspense>
   );
 }

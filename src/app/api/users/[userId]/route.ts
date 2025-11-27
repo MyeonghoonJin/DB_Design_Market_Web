@@ -4,10 +4,10 @@ import { query } from '@/lib/db';
 // 판매자 프로필 조회
 export async function GET(
   request: NextRequest,
-  { params }: { params: { userId: string } }
+  { params }: { params: Promise<{ userId: string }> }
 ) {
   try {
-    const { userId } = params;
+    const { userId } = await params;
 
     // 사용자 정보 조회
     const users = await query<{

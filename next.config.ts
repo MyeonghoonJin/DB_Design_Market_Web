@@ -14,6 +14,8 @@ const nextConfig: NextConfig = {
       },
     ],
   },
+  // 빌드 시 정적 생성 비활성화 (동적 렌더링 강제)
+  output: 'standalone',
 };
 
 export default nextConfig;
