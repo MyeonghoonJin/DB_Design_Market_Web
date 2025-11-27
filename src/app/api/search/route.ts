@@ -14,7 +14,7 @@ export async function GET(request: NextRequest) {
 
     // 검색 조건 구성
     const conditions: string[] = ["status = 'SALE'"];
-    const whereParams: any[] = [];
+    const whereParams: (string | number)[] = [];
 
     if (keyword) {
       conditions.push('(title LIKE ? OR description LIKE ?)');
@@ -28,7 +28,7 @@ export async function GET(request: NextRequest) {
 
     // 정렬 조건
     let orderBy = 'p.created_at DESC'; // 기본값 (최신순)
-    const orderParams: any[] = [];
+    const orderParams: (string | number)[] = [];
 
     if (sort === 'relevance' && keyword) {
       // 정확도순: 완전 일치 > 시작 일치 > 제목 포함 > 설명 포함
