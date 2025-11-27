@@ -38,12 +38,13 @@ export async function POST(request: NextRequest) {
     // 거래 신청 조회
     const requests = await query<{
       request_id: number;
+      room_id: number;
       product_id: number;
       buyer_id: string;
       seller_id: string;
       status: string;
     }[]>(
-      'SELECT request_id, product_id, buyer_id, seller_id, status FROM transaction_requests WHERE request_id = ?',
+      'SELECT request_id, room_id, product_id, buyer_id, seller_id, status FROM transaction_requests WHERE request_id = ?',
       [requestId]
     );
 
@@ -104,10 +105,35 @@ export async function POST(request: NextRequest) {
         ['ACCEPTED', requestId]
       );
 
-      // 다른 대기 중인 신청들은 REJECTED로 변경
+      // 다른 대기 중인 신청들은 REJECTED로 변경하고 거절 기록 추가
+      const otherPendingRequests = await query<{ request_id: number; buyer_id: string }[]>(
+        'SELECT request_id, buyer_id FROM transaction_requests WHERE product_id = ? AND request_id != ? AND status = ?',
+        [transactionRequest.product_id, requestId, 'PENDING']
+      );
+
+      for (const req of otherPendingRequests) {
+        // 거절 기록 추가
+        await query(
+          'INSERT IGNORE INTO rejected_requests (product_id, buyer_id) VALUES (?, ?)',
+          [transactionRequest.product_id, req.buyer_id]
+        );
+      }
+
+      // 다른 대기 중인 신청들 REJECTED로 변경
       await query(
         'UPDATE transaction_requests SET status = ? WHERE product_id = ? AND request_id != ? AND status = ?',
         ['REJECTED', transactionRequest.product_id, requestId, 'PENDING']
+      );
+
+      // 거래 완료 시스템 메시지 전송
+      const completeMessage = JSON.stringify({
+        type: 'TRANSACTION_COMPLETE',
+        message: '거래가 완료되었습니다!'
+      });
+
+      await query(
+        'INSERT INTO messages (room_id, sender_id, content, message_type) VALUES (?, ?, ?, ?)',
+        [transactionRequest.room_id, sellerId, completeMessage, 'SYSTEM']
       );
 
       return NextResponse.json({
@@ -115,10 +141,16 @@ export async function POST(request: NextRequest) {
         message: '거래가 수락되었습니다.',
       });
     } else {
-      // 거래 신청 상태를 REJECTED로 변경
+      // 거절 기록 추가 (재신청 방지)
       await query(
-        'UPDATE transaction_requests SET status = ? WHERE request_id = ?',
-        ['REJECTED', requestId]
+        'INSERT IGNORE INTO rejected_requests (product_id, buyer_id) VALUES (?, ?)',
+        [transactionRequest.product_id, transactionRequest.buyer_id]
+      );
+
+      // 거래 신청 삭제 (채팅방에서 다시 신청 버튼이 보이지만, 거절 기록으로 인해 신청 불가)
+      await query(
+        'DELETE FROM transaction_requests WHERE request_id = ?',
+        [requestId]
       );
 
       return NextResponse.json({

@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
+import { useAuth } from '@/hooks/useAuth';
 
 interface User {
   userId: string;
@@ -12,6 +13,7 @@ interface User {
   phone: string;
   grade: 'BRONZE' | 'SILVER' | 'GOLD' | 'PLATINUM';
   points: number;
+  profileImage: string | null;
   createdAt: string;
 }
 
@@ -34,6 +36,9 @@ interface PurchaseHistory {
   sellerName: string;
   transactionDate: string;
   thumbnail: string | null;
+  canReview: boolean;
+  hasReview: boolean;
+  daysLeft: number;
 }
 
 interface SalesHistory {
@@ -58,22 +63,71 @@ interface WishlistItem {
   sellerName: string;
 }
 
-type TabType = 'selling' | 'wishlist' | 'purchase' | 'sales' | 'info';
+interface PurchaseRequest {
+  requestId: number;
+  roomId: number;
+  productId: number;
+  buyerId: string;
+  buyerName: string;
+  status: 'PENDING' | 'ACCEPTED' | 'REJECTED';
+  createdAt: string;
+  productTitle: string;
+  productPrice: number;
+  productThumbnail: string | null;
+}
+
+interface Review {
+  reviewId: number;
+  transactionId: number;
+  score: number;
+  content: string;
+  createdAt: string;
+  productId: number;
+  productTitle: string;
+  productPrice: number;
+  productThumbnail: string | null;
+  sellerId: string;
+  sellerName: string;
+}
+
+interface ReceivedReview {
+  reviewId: number;
+  transactionId: number;
+  score: number;
+  content: string;
+  createdAt: string;
+  productId: number;
+  productTitle: string;
+  productPrice: number;
+  productThumbnail: string | null;
+  buyerId: string;
+  buyerName: string;
+}
+
+type TabType = 'selling' | 'requests' | 'wishlist' | 'purchase' | 'sales' | 'reviews' | 'info';
 
 export default function MyPage() {
   const router = useRouter();
+  const { isAuthenticated, isLoading: authLoading } = useAuth();
   const [activeTab, setActiveTab] = useState<TabType>('selling');
   const [user, setUser] = useState<User | null>(null);
   const [sellingProducts, setSellingProducts] = useState<SellingProduct[]>([]);
   const [purchaseHistory, setPurchaseHistory] = useState<PurchaseHistory[]>([]);
   const [salesHistory, setSalesHistory] = useState<SalesHistory[]>([]);
   const [wishlist, setWishlist] = useState<WishlistItem[]>([]);
+  const [purchaseRequests, setPurchaseRequests] = useState<PurchaseRequest[]>([]);
+  const [reviews, setReviews] = useState<Review[]>([]);
+  const [receivedReviews, setReceivedReviews] = useState<ReceivedReview[]>([]);
+  const [reviewSubTab, setReviewSubTab] = useState<'written' | 'received'>('written');
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
+  const [processingRequestId, setProcessingRequestId] = useState<number | null>(null);
 
   useEffect(() => {
-    fetchMyPageData();
-  }, []);
+    if (isAuthenticated) {
+      fetchMyPageData();
+    }
+  }, [isAuthenticated]);
 
   const fetchMyPageData = async () => {
     try {
@@ -100,6 +154,27 @@ export default function MyPage() {
         const wishlistData = await wishlistResponse.json();
         setWishlist(wishlistData.wishlists);
       }
+
+      // 받은 구매 요청 조회
+      const requestsResponse = await fetch('/api/transactions/requests');
+      if (requestsResponse.ok) {
+        const requestsData = await requestsResponse.json();
+        setPurchaseRequests(requestsData.requests);
+      }
+
+      // 작성한 후기 목록 조회
+      const reviewsResponse = await fetch('/api/reviews');
+      if (reviewsResponse.ok) {
+        const reviewsData = await reviewsResponse.json();
+        setReviews(reviewsData.reviews);
+      }
+
+      // 받은 후기 목록 조회
+      const receivedReviewsResponse = await fetch('/api/reviews/received');
+      if (receivedReviewsResponse.ok) {
+        const receivedReviewsData = await receivedReviewsResponse.json();
+        setReceivedReviews(receivedReviewsData.reviews);
+      }
     } catch (err) {
       console.error('마이페이지 데이터 조회 오류:', err);
       setError('데이터를 불러오는데 실패했습니다.');
@@ -125,6 +200,38 @@ export default function MyPage() {
     }
   };
 
+  const handleRespondRequest = async (requestId: number, action: 'accept' | 'reject') => {
+    const confirmMessage = action === 'accept'
+      ? '이 구매 요청을 수락하시겠습니까?\n수락하면 거래가 완료되고 상품이 판매완료 처리됩니다.'
+      : '이 구매 요청을 거절하시겠습니까?\n거절하면 해당 구매자는 다시 신청할 수 없습니다.';
+
+    if (!confirm(confirmMessage)) return;
+
+    setProcessingRequestId(requestId);
+    try {
+      const response = await fetch('/api/transactions/request/respond', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ requestId, action }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        alert(data.error || '처리에 실패했습니다.');
+        return;
+      }
+
+      alert(data.message);
+      fetchMyPageData();
+    } catch (err) {
+      console.error('응답 처리 오류:', err);
+      alert('처리에 실패했습니다.');
+    } finally {
+      setProcessingRequestId(null);
+    }
+  };
+
   const gradeInfo = {
     BRONZE: { text: '브론즈', color: 'bg-amber-700', nextGrade: 'SILVER', requiredTrades: 5 },
     SILVER: { text: '실버', color: 'bg-gray-400', nextGrade: 'GOLD', requiredTrades: 15 },
@@ -134,9 +241,11 @@ export default function MyPage() {
 
   const tabs = [
     { id: 'selling' as const, label: '판매 중' },
+    { id: 'requests' as const, label: '구매 요청' },
     { id: 'wishlist' as const, label: '찜 목록' },
     { id: 'purchase' as const, label: '구매 내역' },
     { id: 'sales' as const, label: '판매 내역' },
+    { id: 'reviews' as const, label: '후기' },
     { id: 'info' as const, label: '내 정보' },
   ];
 
@@ -158,7 +267,7 @@ export default function MyPage() {
     }
   };
 
-  if (isLoading) {
+  if (authLoading || isLoading) {
     return (
       <div className="max-w-5xl mx-auto px-4 py-8">
         <div className="flex justify-center items-center h-64">
@@ -166,6 +275,10 @@ export default function MyPage() {
         </div>
       </div>
     );
+  }
+
+  if (!isAuthenticated) {
+    return null;
   }
 
   if (error || !user) {
@@ -189,10 +302,20 @@ export default function MyPage() {
       <div className="bg-white rounded-2xl shadow-md p-6 mb-8">
         <div className="flex items-start justify-between">
           <div className="flex items-center gap-4">
-            <div className="w-20 h-20 bg-gray-200 rounded-full flex items-center justify-center">
-              <svg className="w-10 h-10 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-              </svg>
+            <div className="w-20 h-20 bg-gray-200 rounded-full flex items-center justify-center overflow-hidden">
+              {user.profileImage ? (
+                <Image
+                  src={user.profileImage}
+                  alt={user.name}
+                  width={80}
+                  height={80}
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                <svg className="w-10 h-10 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                </svg>
+              )}
             </div>
             <div>
               <h1 className="text-2xl font-bold">{user.name}</h1>
@@ -254,9 +377,11 @@ export default function MyPage() {
             >
               {tab.label}
               {tab.id === 'selling' && ` (${sellingProducts.length})`}
+              {tab.id === 'requests' && ` (${purchaseRequests.filter(r => r.status === 'PENDING').length})`}
               {tab.id === 'wishlist' && ` (${wishlist.length})`}
               {tab.id === 'purchase' && ` (${purchaseHistory.length})`}
               {tab.id === 'sales' && ` (${salesHistory.length})`}
+              {tab.id === 'reviews' && ` (${reviews.length})`}
             </button>
           ))}
         </div>
@@ -320,6 +445,102 @@ export default function MyPage() {
                     </div>
                   </div>
                 </Link>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {activeTab === 'requests' && (
+        <div>
+          <p className="text-gray-600 mb-4">
+            대기 중인 구매 요청 {purchaseRequests.filter(r => r.status === 'PENDING').length}건
+          </p>
+          {purchaseRequests.length === 0 ? (
+            <div className="text-center py-12 text-gray-500">
+              <svg className="w-16 h-16 mx-auto mb-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
+              </svg>
+              <p>받은 구매 요청이 없습니다</p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {purchaseRequests.map((request) => (
+                <div key={request.requestId} className="bg-white rounded-lg shadow p-4">
+                  <div className="flex gap-4">
+                    <Link href={`/products/${request.productId}`}>
+                      <div className="w-20 h-20 bg-gray-100 rounded-lg overflow-hidden flex-shrink-0 relative">
+                        {request.productThumbnail ? (
+                          <Image
+                            src={request.productThumbnail}
+                            alt={request.productTitle}
+                            fill
+                            className="object-cover"
+                          />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center">
+                            <svg className="w-8 h-8 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                            </svg>
+                          </div>
+                        )}
+                      </div>
+                    </Link>
+                    <div className="flex-1 min-w-0">
+                      <Link href={`/products/${request.productId}`}>
+                        <h3 className="font-medium text-gray-900 truncate hover:text-orange-500">
+                          {request.productTitle}
+                        </h3>
+                      </Link>
+                      <p className="text-orange-500 font-bold mt-1">
+                        {request.productPrice.toLocaleString()}원
+                      </p>
+                      <div className="text-sm text-gray-500 mt-1">
+                        <p>구매자: <span className="text-gray-700">{request.buyerName}</span></p>
+                        <p>{new Date(request.createdAt).toLocaleDateString('ko-KR', {
+                          year: 'numeric',
+                          month: 'long',
+                          day: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit'
+                        })}</p>
+                      </div>
+                    </div>
+                    <div className="flex flex-col items-end gap-2">
+                      <span className={`text-xs px-2 py-1 rounded text-white ${
+                        request.status === 'PENDING' ? 'bg-yellow-500' :
+                        request.status === 'ACCEPTED' ? 'bg-green-500' : 'bg-red-500'
+                      }`}>
+                        {request.status === 'PENDING' ? '대기중' :
+                         request.status === 'ACCEPTED' ? '수락됨' : '거절됨'}
+                      </span>
+                      {request.status === 'PENDING' && (
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => handleRespondRequest(request.requestId, 'accept')}
+                            disabled={processingRequestId === request.requestId}
+                            className="px-3 py-1.5 bg-green-500 text-white text-sm rounded-lg hover:bg-green-600 disabled:bg-gray-300"
+                          >
+                            수락
+                          </button>
+                          <button
+                            onClick={() => handleRespondRequest(request.requestId, 'reject')}
+                            disabled={processingRequestId === request.requestId}
+                            className="px-3 py-1.5 bg-red-500 text-white text-sm rounded-lg hover:bg-red-600 disabled:bg-gray-300"
+                          >
+                            거절
+                          </button>
+                        </div>
+                      )}
+                      <Link
+                        href={`/chat/${request.roomId}`}
+                        className="px-3 py-1.5 border border-gray-300 text-gray-600 text-sm rounded-lg hover:bg-gray-50"
+                      >
+                        채팅
+                      </Link>
+                    </div>
+                  </div>
+                </div>
               ))}
             </div>
           )}
@@ -422,9 +643,22 @@ export default function MyPage() {
                     </p>
                   </div>
                   <div className="flex items-center">
-                    <button className="px-4 py-2 bg-orange-500 text-white rounded-lg text-sm hover:bg-orange-600 transition-colors">
-                      후기 작성
-                    </button>
+                    {purchase.canReview ? (
+                      <Link
+                        href={`/review/${purchase.transactionId}`}
+                        className="px-4 py-2 bg-orange-500 text-white rounded-lg text-sm hover:bg-orange-600 transition-colors"
+                      >
+                        후기 작성 ({purchase.daysLeft}일 남음)
+                      </Link>
+                    ) : purchase.hasReview ? (
+                      <span className="px-4 py-2 bg-gray-100 text-gray-500 rounded-lg text-sm">
+                        후기 작성 완료
+                      </span>
+                    ) : (
+                      <span className="px-4 py-2 bg-gray-100 text-gray-500 rounded-lg text-sm">
+                        기간 만료
+                      </span>
+                    )}
                   </div>
                 </div>
               ))}
@@ -473,6 +707,168 @@ export default function MyPage() {
                 </div>
               ))}
             </div>
+          )}
+        </div>
+      )}
+
+      {activeTab === 'reviews' && (
+        <div>
+          {/* 서브 탭 */}
+          <div className="flex gap-4 mb-6">
+            <button
+              onClick={() => setReviewSubTab('written')}
+              className={`pb-2 px-4 font-medium transition-colors ${
+                reviewSubTab === 'written'
+                  ? 'text-orange-500 border-b-2 border-orange-500'
+                  : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              작성한 후기 ({reviews.length})
+            </button>
+            <button
+              onClick={() => setReviewSubTab('received')}
+              className={`pb-2 px-4 font-medium transition-colors ${
+                reviewSubTab === 'received'
+                  ? 'text-orange-500 border-b-2 border-orange-500'
+                  : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              받은 후기 ({receivedReviews.length})
+            </button>
+          </div>
+
+          {/* 작성한 후기 */}
+          {reviewSubTab === 'written' && (
+            <>
+              {reviews.length === 0 ? (
+                <div className="text-center py-12 text-gray-500">
+                  <svg className="w-16 h-16 mx-auto mb-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
+                  </svg>
+                  <p>작성한 후기가 없습니다</p>
+                  <p className="text-sm mt-2">구매 후 후기를 남겨보세요!</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {reviews.map((review) => (
+                    <div key={review.reviewId} className="bg-white rounded-lg shadow p-4">
+                      <div className="flex gap-4">
+                        <Link href={`/products/${review.productId}`}>
+                          <div className="w-20 h-20 bg-gray-100 rounded-lg overflow-hidden flex-shrink-0 relative">
+                            {review.productThumbnail ? (
+                              <Image
+                                src={review.productThumbnail}
+                                alt={review.productTitle}
+                                fill
+                                className="object-cover"
+                              />
+                            ) : (
+                              <div className="w-full h-full flex items-center justify-center">
+                                <svg className="w-8 h-8 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                </svg>
+                              </div>
+                            )}
+                          </div>
+                        </Link>
+                        <div className="flex-1 min-w-0">
+                          <Link href={`/products/${review.productId}`}>
+                            <h3 className="font-medium text-gray-900 truncate hover:text-orange-500">
+                              {review.productTitle}
+                            </h3>
+                          </Link>
+                          <p className="text-orange-500 font-bold mt-1">
+                            {review.productPrice.toLocaleString()}원
+                          </p>
+                          <p className="text-sm text-gray-500">
+                            판매자: {review.sellerName}
+                          </p>
+                        </div>
+                        <div className="flex flex-col items-end">
+                          <div className="flex items-center gap-1">
+                            <span className="text-lg font-bold text-orange-500">{review.score}</span>
+                            <span className="text-gray-400 text-sm">/ 5점</span>
+                          </div>
+                          <p className="text-xs text-gray-400 mt-1">
+                            {new Date(review.createdAt).toLocaleDateString('ko-KR')}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="mt-3 pt-3 border-t">
+                        <p className="text-gray-700 text-sm whitespace-pre-wrap">{review.content}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </>
+          )}
+
+          {/* 받은 후기 */}
+          {reviewSubTab === 'received' && (
+            <>
+              {receivedReviews.length === 0 ? (
+                <div className="text-center py-12 text-gray-500">
+                  <svg className="w-16 h-16 mx-auto mb-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
+                  </svg>
+                  <p>받은 후기가 없습니다</p>
+                  <p className="text-sm mt-2">상품을 판매하고 후기를 받아보세요!</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {receivedReviews.map((review) => (
+                    <div key={review.reviewId} className="bg-white rounded-lg shadow p-4">
+                      <div className="flex gap-4">
+                        <Link href={`/products/${review.productId}`}>
+                          <div className="w-20 h-20 bg-gray-100 rounded-lg overflow-hidden flex-shrink-0 relative">
+                            {review.productThumbnail ? (
+                              <Image
+                                src={review.productThumbnail}
+                                alt={review.productTitle}
+                                fill
+                                className="object-cover"
+                              />
+                            ) : (
+                              <div className="w-full h-full flex items-center justify-center">
+                                <svg className="w-8 h-8 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                </svg>
+                              </div>
+                            )}
+                          </div>
+                        </Link>
+                        <div className="flex-1 min-w-0">
+                          <Link href={`/products/${review.productId}`}>
+                            <h3 className="font-medium text-gray-900 truncate hover:text-orange-500">
+                              {review.productTitle}
+                            </h3>
+                          </Link>
+                          <p className="text-orange-500 font-bold mt-1">
+                            {review.productPrice.toLocaleString()}원
+                          </p>
+                          <p className="text-sm text-gray-500">
+                            구매자: {review.buyerName}
+                          </p>
+                        </div>
+                        <div className="flex flex-col items-end">
+                          <div className="flex items-center gap-1">
+                            <span className="text-lg font-bold text-orange-500">{review.score}</span>
+                            <span className="text-gray-400 text-sm">/ 5점</span>
+                          </div>
+                          <p className="text-xs text-gray-400 mt-1">
+                            {new Date(review.createdAt).toLocaleDateString('ko-KR')}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="mt-3 pt-3 border-t">
+                        <p className="text-gray-700 text-sm whitespace-pre-wrap">{review.content}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </>
           )}
         </div>
       )}

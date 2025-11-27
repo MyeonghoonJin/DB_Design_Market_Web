@@ -22,28 +22,57 @@ export default function Home() {
   const [sortBy, setSortBy] = useState<string>('latest');
   const [products, setProducts] = useState<Product[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(true);
+  const [total, setTotal] = useState(0);
+  const [loadingMore, setLoadingMore] = useState(false);
 
   useEffect(() => {
-    fetchProducts();
+    // 검색 조건이 바뀌면 초기화
+    setProducts([]);
+    setPage(1);
+    setHasMore(true);
+    fetchProducts(1);
   }, [selectedCategory, sortBy]);
 
-  const fetchProducts = async () => {
+  const fetchProducts = async (pageNum: number) => {
+    if (pageNum === 1) {
+      setIsLoading(true);
+    } else {
+      setLoadingMore(true);
+    }
+
     try {
       const params = new URLSearchParams();
       if (selectedCategory !== '전체') {
         params.append('category', selectedCategory);
       }
       params.append('sort', sortBy);
+      params.append('page', pageNum.toString());
 
       const response = await fetch(`/api/products?${params.toString()}`);
       if (response.ok) {
         const data = await response.json();
-        setProducts(data.products);
+
+        if (pageNum === 1) {
+          setProducts(data.products || []);
+        } else {
+          // 중복 제거: 기존 배열에 없는 상품만 추가
+          setProducts(prev => {
+            const existingIds = new Set(prev.map(p => p.id));
+            const newProducts = (data.products || []).filter((p: Product) => !existingIds.has(p.id));
+            return [...prev, ...newProducts];
+          });
+        }
+
+        setTotal(data.total || 0);
+        setHasMore(data.hasMore || false);
       }
     } catch (error) {
       console.error('상품 조회 오류:', error);
     } finally {
       setIsLoading(false);
+      setLoadingMore(false);
     }
   };
 
@@ -53,6 +82,10 @@ export default function Home() {
 
   const fetchProductsWithSearch = async () => {
     setIsLoading(true);
+    setProducts([]);
+    setPage(1);
+    setHasMore(true);
+
     try {
       const params = new URLSearchParams();
       if (selectedCategory !== '전체') {
@@ -62,11 +95,18 @@ export default function Home() {
         params.append('search', searchTerm);
       }
       params.append('sort', sortBy);
+      params.append('page', '1');
 
       const response = await fetch(`/api/products?${params.toString()}`);
       if (response.ok) {
         const data = await response.json();
-        setProducts(data.products);
+        // ID로 중복 제거
+        const uniqueProducts = Array.from(
+          new Map((data.products || []).map((p: Product) => [p.id, p])).values()
+        ) as Product[];
+        setProducts(uniqueProducts);
+        setTotal(data.total || 0);
+        setHasMore(data.hasMore || false);
       }
     } catch (error) {
       console.error('상품 조회 오류:', error);
@@ -74,6 +114,27 @@ export default function Home() {
       setIsLoading(false);
     }
   };
+
+  // 무한 스크롤 감지
+  useEffect(() => {
+    const handleScroll = () => {
+      const scrollTop = window.scrollY;
+      const windowHeight = window.innerHeight;
+      const documentHeight = document.documentElement.scrollHeight;
+
+      // 하단에서 200px 이내로 도달하면 다음 페이지 로드
+      if (scrollTop + windowHeight >= documentHeight - 200) {
+        if (hasMore && !isLoading && !loadingMore) {
+          const nextPage = page + 1;
+          setPage(nextPage);
+          fetchProducts(nextPage);
+        }
+      }
+    };
+
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, [hasMore, isLoading, loadingMore, page]);
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {
@@ -88,7 +149,32 @@ export default function Home() {
   };
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <div className="w-full py-8">
+      <div className="max-w-[1920px] mx-auto px-4 flex gap-6">
+        {/* 왼쪽 광고 배너 영역 */}
+        <aside className="hidden xl:block flex-1">
+          <div className="sticky top-40 space-y-4 ml-10">
+            <div className="relative h-96 bg-gray-100 rounded-xl shadow-lg overflow-hidden">
+              <Image
+                src="/배너1.png"
+                alt="광고 배너 1"
+                fill
+                className="object-cover"
+              />
+            </div>
+            <div className="relative h-72 bg-gray-100 rounded-xl shadow-lg overflow-hidden">
+              <Image
+                src="/배너2.png"
+                alt="광고 배너 2"
+                fill
+                className="object-cover"
+              />
+            </div>
+          </div>
+        </aside>
+
+        {/* 메인 콘텐츠 영역 */}
+        <div className="w-full max-w-7xl">
       {/* 히어로 섹션 */}
       <section className="bg-gradient-to-r from-orange-500 to-orange-600 rounded-2xl p-8 mb-8 text-white">
         <h1 className="text-3xl md:text-4xl font-bold mb-4">
@@ -219,7 +305,44 @@ export default function Home() {
             <p>등록된 상품이 없습니다</p>
           </div>
         )}
+
+        {/* 로딩 인디케이터 (추가 로드 중) */}
+        {loadingMore && (
+          <div className="text-center py-8">
+            <div className="inline-block animate-spin rounded-full h-8 w-8 border-4 border-gray-300 border-t-orange-500"></div>
+          </div>
+        )}
+
+        {/* 더 이상 불러올 상품이 없을 때 */}
+        {!isLoading && !hasMore && products.length > 0 && (
+          <div className="text-center py-8 text-gray-500">
+          </div>
+        )}
       </section>
+        </div>
+
+        {/* 오른쪽 광고 배너 영역 */}
+        <aside className="hidden xl:block flex-1">
+          <div className="sticky top-40 space-y-4 mr-10">
+            <div className="relative h-96 bg-gray-100 rounded-xl shadow-lg overflow-hidden">
+              <Image
+                src="/배너3.png"
+                alt="광고 배너 3"
+                fill
+                className="object-cover"
+              />
+            </div>
+            <div className="relative h-84 bg-gray-100 rounded-xl shadow-lg overflow-hidden">
+              <Image
+                src="/배너4.png"
+                alt="광고 배너 4"
+                fill
+                className="object-cover"
+              />
+            </div>
+          </div>
+        </aside>
+      </div>
     </div>
   );
 }

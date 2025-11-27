@@ -5,7 +5,7 @@ import { query } from '@/lib/db';
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { id, password, name, address, phone } = body;
+    const { id, password, name, address, phone, profileImage } = body;
 
     // 유효성 검사
     if (!id || !password || !name || !address || !phone) {
@@ -47,9 +47,9 @@ export async function POST(request: NextRequest) {
 
     // 사용자 등록
     await query(
-      `INSERT INTO users (user_id, password, name, address, phone, grade, points)
-       VALUES (?, ?, ?, ?, ?, 'BRONZE', 1000)`,
-      [id, hashedPassword, name, address, phone]
+      `INSERT INTO users (user_id, password, name, address, phone, profile_image, grade, points)
+       VALUES (?, ?, ?, ?, ?, ?, 'BRONZE', 1000)`,
+      [id, hashedPassword, name, address, phone, profileImage || null]
     );
 
     return NextResponse.json(

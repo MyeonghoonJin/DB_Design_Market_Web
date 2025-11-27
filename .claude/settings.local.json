@@ -1,11 +1,8 @@
 {
   "permissions": {
     "allow": [
-      "Bash(mysql:*)",
-      "Bash(npm run dev:*)",
-      "Bash(curl:*)",
-      "Bash(npm install:*)",
-      "Bash(ls -la \"c:\\Users\\HOME\\Desktop\\study\\데베설\\market-app\\public\\images\"\" 2>/dev/null || dir \"c:UsersHOMEDesktopstudy데베설market-apppublicimages\" 2>/dev/null || ls \"c:UsersHOMEDesktopstudy데베설market-apppublic\" 2>/dev/null || dir \"c:UsersHOMEDesktopstudy데베설market-apppublic \")"
+      "Bash(netstat:*)",
+      "Bash(findstr:*)"
     ],
     "deny": [],
     "ask": []

@@ -26,9 +26,10 @@ export async function GET(request: NextRequest) {
       phone: string;
       grade: string;
       points: number;
+      profile_image: string | null;
       created_at: Date;
     }[]>(
-      'SELECT user_id, name, address, phone, grade, points, created_at FROM users WHERE user_id = ?',
+      'SELECT user_id, name, address, phone, grade, points, profile_image, created_at FROM users WHERE user_id = ?',
       [userId]
     );
 
@@ -71,10 +72,12 @@ export async function GET(request: NextRequest) {
       seller_name: string;
       transaction_date: Date;
       thumbnail: string | null;
+      has_review: number;
     }[]>(
       `SELECT
         t.transaction_id, t.product_id, p.title, p.price, t.seller_id, u.name as seller_name, t.transaction_date,
-        (SELECT url FROM product_images WHERE product_id = p.product_id ORDER BY image_id LIMIT 1) as thumbnail
+        (SELECT url FROM product_images WHERE product_id = p.product_id ORDER BY image_id LIMIT 1) as thumbnail,
+        (SELECT COUNT(*) FROM reviews WHERE transaction_id = t.transaction_id) as has_review
       FROM transactions t
       JOIN products p ON t.product_id = p.product_id
       JOIN users u ON t.seller_id = u.user_id
@@ -113,6 +116,7 @@ export async function GET(request: NextRequest) {
         phone: user.phone,
         grade: user.grade,
         points: user.points,
+        profileImage: user.profile_image,
         createdAt: user.created_at,
       },
       sellingProducts: sellingProducts.map((p) => ({
@@ -124,16 +128,28 @@ export async function GET(request: NextRequest) {
         thumbnail: p.thumbnail,
         wishCount: p.wish_count,
       })),
-      purchaseHistory: purchaseHistory.map((p) => ({
-        transactionId: p.transaction_id,
-        productId: p.product_id,
-        title: p.title,
-        price: p.price,
-        sellerId: p.seller_id,
-        sellerName: p.seller_name,
-        transactionDate: p.transaction_date,
-        thumbnail: p.thumbnail,
-      })),
+      purchaseHistory: purchaseHistory.map((p) => {
+        const transactionDate = new Date(p.transaction_date);
+        const now = new Date();
+        const diffDays = Math.floor((now.getTime() - transactionDate.getTime()) / (1000 * 60 * 60 * 24));
+        const daysLeft = 7 - diffDays;
+        const hasReview = p.has_review > 0;
+        const canReview = !hasReview && daysLeft > 0;
+
+        return {
+          transactionId: p.transaction_id,
+          productId: p.product_id,
+          title: p.title,
+          price: p.price,
+          sellerId: p.seller_id,
+          sellerName: p.seller_name,
+          transactionDate: p.transaction_date,
+          thumbnail: p.thumbnail,
+          canReview,
+          hasReview,
+          daysLeft,
+        };
+      }),
       salesHistory: salesHistory.map((s) => ({
         transactionId: s.transaction_id,
         productId: s.product_id,

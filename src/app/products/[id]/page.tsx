@@ -560,16 +560,6 @@ export default function ProductDetailPage() {
                     {isDeleting ? '삭제 중...' : '삭제'}
                   </button>
                 </div>
-
-                {/* 거래 완료 버튼 (판매완료가 아닌 경우만) */}
-                {product.status !== 'SOLD' && (
-                  <button
-                    onClick={handleConfirmTransaction}
-                    className="w-full mt-4 bg-green-500 text-white py-3 rounded-lg font-semibold hover:bg-green-600 transition-colors"
-                  >
-                    거래 완료
-                  </button>
-                )}
               </>
             )}
           </div>
@@ -739,7 +729,7 @@ export default function ProductDetailPage() {
                 </div>
               </div>
               <Link
-                href={`/user/${product.sellerId}`}
+                href={`/users/${product.sellerId}`}
                 className="text-sm text-orange-500 hover:underline"
               >
                 판매자 프로필
@@ -760,27 +750,34 @@ export default function ProductDetailPage() {
           </div>
 
           {/* 버튼 */}
-          <div className="flex gap-3">
-            <button
-              onClick={handleWish}
-              className={`flex items-center justify-center gap-2 px-6 py-3 rounded-lg border ${
-                isWished
-                  ? 'bg-red-50 border-red-500 text-red-500'
-                  : 'border-gray-300 text-gray-700 hover:bg-gray-50'
-              } transition-colors`}
-            >
-              <svg className="w-5 h-5" fill={isWished ? 'currentColor' : 'none'} stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
-              </svg>
-              {isWished ? '찜 해제' : '찜하기'}
-            </button>
-            <button
-              onClick={handleChat}
-              className="flex-1 bg-orange-500 text-white py-3 rounded-lg font-semibold hover:bg-orange-600 transition-colors"
-            >
-              채팅하기
-            </button>
-          </div>
+          {product.status !== 'SOLD' && (
+            <div className="flex gap-3">
+              <button
+                onClick={handleWish}
+                className={`flex items-center justify-center gap-2 px-6 py-3 rounded-lg border ${
+                  isWished
+                    ? 'bg-red-50 border-red-500 text-red-500'
+                    : 'border-gray-300 text-gray-700 hover:bg-gray-50'
+                } transition-colors`}
+              >
+                <svg className="w-5 h-5" fill={isWished ? 'currentColor' : 'none'} stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+                </svg>
+                {isWished ? '찜 해제' : '찜하기'}
+              </button>
+              <button
+                onClick={handleChat}
+                className="flex-1 bg-orange-500 text-white py-3 rounded-lg font-semibold hover:bg-orange-600 transition-colors"
+              >
+                채팅하기
+              </button>
+            </div>
+          )}
+          {product.status === 'SOLD' && (
+            <div className="bg-gray-100 text-gray-600 py-4 rounded-lg text-center font-medium">
+              판매 완료된 상품입니다
+            </div>
+          )}
         </div>
       </div>
     </div>

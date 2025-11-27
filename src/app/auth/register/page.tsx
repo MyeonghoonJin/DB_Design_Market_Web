@@ -13,6 +13,7 @@ export default function RegisterPage() {
     name: '',
     address: '',
     phone: '',
+    profileImage: '',
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
 
@@ -75,6 +76,7 @@ export default function RegisterPage() {
           name: formData.name,
           address: formData.address,
           phone: formData.phone,
+          profileImage: formData.profileImage || null,
         }),
       });
 
@@ -196,6 +198,22 @@ export default function RegisterPage() {
                 placeholder="010-0000-0000"
               />
               {errors.phone && <p className="mt-1 text-sm text-red-500">{errors.phone}</p>}
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                프로필 이미지 URL (선택)
+              </label>
+              <input
+                type="url"
+                value={formData.profileImage}
+                onChange={(e) => setFormData({ ...formData, profileImage: e.target.value })}
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                placeholder="https://example.com/profile.jpg"
+              />
+              <p className="mt-1 text-xs text-gray-500">
+                프로필 이미지 URL을 입력하세요. 입력하지 않으면 기본 프로필이 표시됩니다.
+              </p>
             </div>
 
             <div className="bg-orange-50 p-4 rounded-lg text-sm text-orange-700">

@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
+import { useAuth } from '@/hooks/useAuth';
 
 interface WishlistItem {
   wishlistId: number;
@@ -18,13 +19,16 @@ interface WishlistItem {
 
 export default function WishlistPage() {
   const router = useRouter();
+  const { isAuthenticated, isLoading: authLoading } = useAuth();
   const [wishlists, setWishlists] = useState<WishlistItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [removingId, setRemovingId] = useState<number | null>(null);
 
   useEffect(() => {
-    fetchWishlists();
-  }, []);
+    if (isAuthenticated) {
+      fetchWishlists();
+    }
+  }, [isAuthenticated]);
 
   const fetchWishlists = async () => {
     try {
@@ -73,13 +77,17 @@ export default function WishlistPage() {
     SOLD: { text: '판매완료', color: 'bg-gray-500' },
   };
 
-  if (loading) {
+  if (authLoading || loading) {
     return (
       <div className="max-w-5xl mx-auto px-4 py-8">
         <h1 className="text-2xl font-bold mb-6">찜 목록</h1>
         <div className="text-center py-16 text-gray-500">로딩 중...</div>
       </div>
     );
+  }
+
+  if (!isAuthenticated) {
+    return null;
   }
 
   return (

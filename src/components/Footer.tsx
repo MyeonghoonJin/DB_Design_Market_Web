@@ -18,6 +18,8 @@ export default function Footer() {
               <li><Link href="/" className="hover:text-orange-500">물품 검색</Link></li>
               <li><Link href="/products/new" className="hover:text-orange-500">판매하기</Link></li>
               <li><Link href="/chat" className="hover:text-orange-500">채팅</Link></li>
+              <li><Link href="/history" className="hover:text-orange-500">거래 내역</Link></li>
+              <li><Link href="/requests" className="hover:text-orange-500">받은 구매 신청</Link></li>
             </ul>
           </div>
           <div>
@@ -38,7 +40,7 @@ export default function Footer() {
           </div>
         </div>
         <div className="border-t border-gray-700 mt-8 pt-8 text-center text-sm">
-          <p>&copy; 2024 중고마켓. All rights reserved.</p>
+          <p>&copy; 2025 중고마켓. All rights reserved.</p>
         </div>
       </div>
     </footer>

@@ -181,20 +181,30 @@ export async function GET(request: NextRequest) {
       params
     );
 
-    const formattedTransactions = transactions.map((t) => ({
-      transactionId: t.transaction_id,
-      sellerId: t.seller_id,
-      buyerId: t.buyer_id,
-      productId: t.product_id,
-      transactionDate: t.transaction_date,
-      productTitle: t.product_title,
-      productPrice: t.product_price,
-      productThumbnail: t.product_thumbnail,
-      sellerName: t.seller_name,
-      buyerName: t.buyer_name,
-      hasReview: t.has_review > 0,
-      isSeller: t.seller_id === userId,
-    }));
+    const formattedTransactions = transactions.map((t) => {
+      const transactionDate = new Date(t.transaction_date);
+      const now = new Date();
+      const diffDays = Math.floor((now.getTime() - transactionDate.getTime()) / (1000 * 60 * 60 * 24));
+      const daysLeft = 7 - diffDays;
+      const canReview = t.buyer_id === userId && t.has_review === 0 && daysLeft > 0;
+
+      return {
+        transactionId: t.transaction_id,
+        sellerId: t.seller_id,
+        buyerId: t.buyer_id,
+        productId: t.product_id,
+        transactionDate: t.transaction_date,
+        productTitle: t.product_title,
+        productPrice: t.product_price,
+        productThumbnail: t.product_thumbnail,
+        sellerName: t.seller_name,
+        buyerName: t.buyer_name,
+        hasReview: t.has_review > 0,
+        isSeller: t.seller_id === userId,
+        canReview,
+        daysLeft,
+      };
+    });
 
     return NextResponse.json({ transactions: formattedTransactions });
   } catch (error) {

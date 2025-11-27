@@ -29,6 +29,7 @@ export async function GET(request: NextRequest) {
       other_user_id: string;
       other_user_name: string;
       last_message: string | null;
+      last_message_type: string | null;
       last_message_time: Date | null;
       unread_count: number;
     }[]>(
@@ -43,6 +44,7 @@ export async function GET(request: NextRequest) {
         CASE WHEN cr.buyer_id = ? THEN cr.seller_id ELSE cr.buyer_id END as other_user_id,
         CASE WHEN cr.buyer_id = ? THEN seller.name ELSE buyer.name END as other_user_name,
         (SELECT content FROM messages WHERE room_id = cr.room_id ORDER BY sent_at DESC LIMIT 1) as last_message,
+        (SELECT message_type FROM messages WHERE room_id = cr.room_id ORDER BY sent_at DESC LIMIT 1) as last_message_type,
         (SELECT sent_at FROM messages WHERE room_id = cr.room_id ORDER BY sent_at DESC LIMIT 1) as last_message_time,
         (SELECT COUNT(*) FROM messages WHERE room_id = cr.room_id AND sender_id != ? AND is_read = FALSE) as unread_count
       FROM chat_rooms cr
@@ -54,17 +56,33 @@ export async function GET(request: NextRequest) {
       [userId, userId, userId, userId, userId]
     );
 
-    const chatRooms = rooms.map((r) => ({
-      roomId: r.room_id,
-      productId: r.product_id,
-      productTitle: r.product_title,
-      productThumbnail: r.product_thumbnail,
-      otherUserId: r.other_user_id,
-      otherUserName: r.other_user_name,
-      lastMessage: r.last_message,
-      lastMessageTime: r.last_message_time,
-      unreadCount: r.unread_count,
-    }));
+    const chatRooms = rooms.map((r) => {
+      let lastMessage = r.last_message;
+
+      // SYSTEM 메시지인 경우 JSON 파싱해서 메시지 추출
+      if (r.last_message_type === 'SYSTEM' && r.last_message) {
+        try {
+          const systemData = JSON.parse(r.last_message);
+          if (systemData.message) {
+            lastMessage = systemData.message;
+          }
+        } catch {
+          // 파싱 실패 시 원본 메시지 유지
+        }
+      }
+
+      return {
+        roomId: r.room_id,
+        productId: r.product_id,
+        productTitle: r.product_title,
+        productThumbnail: r.product_thumbnail,
+        otherUserId: r.other_user_id,
+        otherUserName: r.other_user_name,
+        lastMessage,
+        lastMessageTime: r.last_message_time,
+        unreadCount: r.unread_count,
+      };
+    });
 
     return NextResponse.json({ chatRooms });
   } catch (error) {

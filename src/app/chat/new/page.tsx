@@ -4,6 +4,7 @@ import { useState, useEffect, Suspense } from 'react';
 import Link from 'next/link';
 import { useSearchParams, useRouter } from 'next/navigation';
 import Image from 'next/image';
+import { useAuth } from '@/hooks/useAuth';
 
 interface Product {
   id: number;
@@ -18,6 +19,7 @@ interface Product {
 function NewChatContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
+  const { isAuthenticated, isLoading: authLoading } = useAuth();
   const productId = searchParams.get('productId');
 
   const [product, setProduct] = useState<Product | null>(null);
@@ -27,13 +29,15 @@ function NewChatContent() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    if (!isAuthenticated) return;
+
     if (productId) {
       fetchProduct();
     } else {
       setError('상품 정보가 없습니다.');
       setLoading(false);
     }
-  }, [productId]);
+  }, [productId, isAuthenticated]);
 
   const fetchProduct = async () => {
     try {
@@ -108,12 +112,16 @@ function NewChatContent() {
     SOLD: { text: '판매완료', color: 'bg-gray-500' },
   };
 
-  if (loading) {
+  if (authLoading || loading) {
     return (
       <div className="max-w-3xl mx-auto h-[calc(100vh-140px)] flex items-center justify-center">
         <div className="text-gray-500">로딩 중...</div>
       </div>
     );
+  }
+
+  if (!isAuthenticated) {
+    return null;
   }
 
   if (error || !product) {

@@ -60,6 +60,7 @@ export async function GET(
       is_read: boolean;
       sent_at: Date;
       sender_name: string;
+      message_type: string;
     }[]>(
       `SELECT
         m.message_id,
@@ -67,6 +68,7 @@ export async function GET(
         m.content,
         m.is_read,
         m.sent_at,
+        m.message_type,
         u.name as sender_name
       FROM messages m
       JOIN users u ON m.sender_id = u.user_id
@@ -89,6 +91,7 @@ export async function GET(
       isRead: m.is_read,
       sentAt: m.sent_at,
       isMine: m.sender_id === userId,
+      messageType: m.message_type,
     }));
 
     return NextResponse.json({ messages: formattedMessages });
